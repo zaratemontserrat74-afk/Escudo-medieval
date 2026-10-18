@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Escudo medieval</title>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+  <style>
+    body { margin: 0; background: #222; color: white; font-family: Arial; text-align: center; }
+    model-viewer { width: 100%; height: 70vh; background: #333; }
+    button { padding: 12px 20px; margin: 8px; font-size: 16px; cursor: pointer; }
+    #info { font-size: 14px; opacity: .8; padding: 0 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>Escudo medieval</h1>
+
+  <model-viewer id="escudo" src="Escudo_pintado1.glb" alt="Escudo 3D"
+                camera-controls shadow-intensity="1"
+                camera-orbit="90deg 90deg auto"
+                field-of-view="30deg"></model-viewer>
+
+  <button data-grupo="Grande">Grande: Caucho sucio</button>
+  <button data-grupo="Mediano">Mediano: Bronce</button>
+  <button data-grupo="Pequeño">Pequeño: Madera</button>
+  <button id="b2">Normal map del bronce: ON</button>
+
+  <p id="info"></p>
+
+  <script>
+    const VISTA_INICIAL = "90deg 90deg auto";
+
+    const GRUPOS = {
+      "Centro":  ["Centro1",  "Centro2"],
+      "Grande":  ["Grande1",  "Grande2"],
+      "Mediano": ["Mediano1", "Mediano2"],
+      "Pequeño": ["Pequeño1", "Pequeño2"],
+    };
+    const BRONCE = ["Centro1", "Pico1"];
+
+    const NOMBRES_VERSION = {
+      "Grande":  { 1: "Caucho sucio", 2: "Acero teñido" },
+      "Mediano": { 1: "Bronce",       2: "Acero" },
+      "Pequeño": { 1: "Madera",       2: "Cobalto dañado" },
+    };
+
+    const mv   = document.getElementById("escudo");
+    const info = document.getElementById("info");
+    let bronces = [];
+    const normalOriginal = new Map();
+    const version = {};
+
+    mv.addEventListener("error", (e) => {
+      const detalle = e.detail && e.detail.sourceError ? e.detail.sourceError.message : "desconocido";
+      info.textContent = "ERROR al cargar el modelo: " + detalle;
+      console.error(e);
+    });
+
+    mv.addEventListener("load", () => {
+      mv.cameraOrbit = VISTA_INICIAL;
+      mv.jumpCameraToGoal();
+
+      bronces = BRONCE.map(n => mv.model.getMaterialByName(n)).filter(Boolean);
+      bronces.forEach(m => normalOriginal.set(m, m.normalTexture ? m.normalTexture.texture : null));
+    });
+
+    document.querySelectorAll("button[data-grupo]").forEach(btn => {
+      const grupo = btn.dataset.grupo;
+      version[grupo] = 1;
+      btn.textContent = grupo + ": " + NOMBRES_VERSION[grupo][1];
+
+      btn.onclick = () => {
+        const [n1, n2] = GRUPOS[grupo];
+        const a = mv.model.getMaterialByName(n1);
+        const b = mv.model.getMaterialByName(n2);
+
+        if (!a || !b) {
+          info.textContent = "No encontré " + (!a ? n1 : n2) + " en el modelo (revisa que exista en Blender).";
+          return;
+        }
+        info.textContent = "";
+
+        const pa = a.pbrMetallicRoughness, pb = b.pbrMetallicRoughness;
+        const texA = pa.baseColorTexture ? pa.baseColorTexture.texture : null;
+        const texB = pb.baseColorTexture ? pb.baseColorTexture.texture : null;
+        const facA = pa.baseColorFactor.slice();
+        const facB = pb.baseColorFactor.slice();
+
+        if (pa.baseColorTexture) pa.baseColorTexture.setTexture(texB);
+        if (pb.baseColorTexture) pb.baseColorTexture.setTexture(texA);
+        pa.setBaseColorFactor(facB);
+        pb.setBaseColorFactor(facA);
+
+        version[grupo] = version[grupo] === 1 ? 2 : 1;
+        btn.textContent = grupo + ": " + NOMBRES_VERSION[grupo][version[grupo]];
+      };
+    });
+
+    let normalOn = true;
+    document.getElementById("b2").onclick = () => {
+      normalOn = !normalOn;
+      bronces.forEach(m => {
+        if (m.normalTexture) m.normalTexture.setTexture(normalOn ? normalOriginal.get(m) : null);
+      });
+      document.getElementById("b2").textContent =
+        "Normal map del bronce: " + (normalOn ? "ON" : "OFF");
+    };
+  </script>
+
+</body>
+</html>
